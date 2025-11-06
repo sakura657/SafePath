@@ -6,7 +6,7 @@
 >
 > With two specialized modes—Obstacle Avoidance for safety-focused navigation and Voice Interaction for natural scene exploration—EchoSight empowers blind and low-vision users to navigate their surroundings with greater confidence and independence.
 >
-> **Developed by**: Bobby Tang & Yuan Gao
+> **Developed by**: Bobby Tang & Zhenyu Qi & Congqi Bai & Tong Jin
 
 ## 📱 Demo
 
