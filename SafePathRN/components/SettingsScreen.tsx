@@ -10,14 +10,17 @@ import {
 } from 'react-native';
 import { checkBackendHealth } from '../services/asrLlmService';
 import { useAppConfig } from '../config/AppConfigProvider';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function SettingsScreen() {
   const { config, updateConfig, resetConfig } = useAppConfig();
+  const { user, signOut } = useAuth();
   const [backendUrl, setBackendUrl] = useState(config.apiBaseUrl);
   const [apiKey, setApiKey] = useState(config.openRouterApiKey);
   const [model, setModel] = useState(config.openRouterModel);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     setBackendUrl(config.apiBaseUrl);
@@ -63,6 +66,17 @@ export function SettingsScreen() {
   const resetToDefaults = async () => {
     await resetConfig();
     Alert.alert('Reset', 'Configuration restored to defaults.');
+  };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to sign out.');
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -139,6 +153,21 @@ export function SettingsScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={styles.resetButton} onPress={resetToDefaults}>
           <Text style={styles.resetButtonText}>Reset to Defaults</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Account</Text>
+        <Text style={styles.description}>
+          Signed in as{' '}
+          <Text style={styles.infoValue}>{user?.email ?? 'Unknown user'}</Text>
+        </Text>
+        <TouchableOpacity
+          style={[styles.logoutButton, isLoggingOut && styles.buttonDisabled]}
+          onPress={handleLogout}
+          disabled={isLoggingOut}
+        >
+          <Text style={styles.logoutButtonText}>{isLoggingOut ? 'Logging out...' : 'Logout'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -257,6 +286,17 @@ const styles = StyleSheet.create({
     borderColor: '#555',
   },
   resetButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  logoutButton: {
+    backgroundColor: '#e53935',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  logoutButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

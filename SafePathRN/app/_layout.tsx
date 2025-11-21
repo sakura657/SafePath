@@ -5,6 +5,8 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppConfigProvider } from '@/config/AppConfigProvider';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthGate } from '@/components/AuthGate';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -14,14 +16,18 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <AppConfigProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </AppConfigProvider>
+    <AuthProvider>
+      <AppConfigProvider>
+        <AuthGate>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            </Stack>
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </AuthGate>
+      </AppConfigProvider>
+    </AuthProvider>
   );
 }
