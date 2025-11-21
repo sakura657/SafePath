@@ -1,6 +1,77 @@
 import * as ImageManipulator from 'expo-image-manipulator';
-import { OPENROUTER_API_KEY, OPENROUTER_API_URL, OPENROUTER_MODEL } from '../config/env';
+import { 
+  OPENROUTER_API_KEY, 
+  OPENROUTER_API_URL, 
+  OPENROUTER_MODEL,
+  OPENROUTER_SITE_URL,
+  OPENROUTER_APP_NAME
+} from '../config/env';
 import { VlmResponse } from '../types';
+
+/**
+ * Compress and encode image to base64 with size limit (similar to Swift implementation)
+ */
+async function compressAndEncodeImage(imageUri: string, maxSizeMB: number = 15.0): Promise<string> {
+  const qualities = [0.85, 0.70, 0.50, 0.30];
+  
+  for (const quality of qualities) {
+    const manipulated = await ImageManipulator.manipulateAsync(
+      imageUri,
+      [],
+      { compress: quality, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    
+    const base64 = await imageToBase64(manipulated.uri);
+    const estimatedSize = (base64.length * 3) / 4; // Approximate size in bytes
+    
+    if (estimatedSize < maxSizeMB * 1024 * 1024) {
+      return base64;
+    }
+  }
+  
+  // If still too large, downscale to 512px max dimension
+  const downscaled = await ImageManipulator.manipulateAsync(
+    imageUri,
+    [{ resize: { width: 512 } }],
+    { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
+  );
+  
+  return await imageToBase64(downscaled.uri);
+}
+
+/**
+ * Describe the environment in the image for voice interaction mode
+ */
+export async function describeEnvironment(imageUri: string): Promise<VlmResponse> {
+  const prompt = `You are a helpful assistant for a blind person. Describe the environment in this image briefly. Focus on key objects, layout, and important details. Keep it under 20 words.`;
+  
+  return await analyzeImageWithVLM(imageUri, prompt);
+}
+
+/**
+ * Get obstacle avoidance advice when warning triggers
+ */
+export async function getObstacleAvoidanceAdvice(
+  imageUri: string,
+  detectedObject: string,
+  distance: number
+): Promise<VlmResponse> {
+  const prompt = `You are a blind navigation assistant. A ${detectedObject} is ${distance.toFixed(1)}m ahead. Give ONE brief avoidance instruction in 10 words maximum.`;
+  
+  return await analyzeImageWithVLM(imageUri, prompt);
+}
+
+/**
+ * Handle natural language query with image context
+ */
+export async function handleNaturalLanguageQuery(
+  query: string,
+  imageUri: string
+): Promise<VlmResponse> {
+  const prompt = `You are a helpful assistant for a blind person. Question: "${query}" Answer briefly in 10 words maximum based on the image.`;
+  
+  return await analyzeImageWithVLM(imageUri, prompt);
+}
 
 /**
  * Capture and process camera frame with VLM (Vision Language Model)
@@ -10,24 +81,21 @@ export async function analyzeImageWithVLM(
   prompt: string = 'Describe what you see in this image, focusing on any obstacles, hazards, or important objects for navigation.'
 ): Promise<VlmResponse> {
   try {
-    // Resize and compress image to reduce API payload size
-    const manipulatedImage = await ImageManipulator.manipulateAsync(
-      imageUri,
-      [{ resize: { width: 1024 } }], // Resize to max width 1024px
-      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-    );
+    // Compress and encode image with size limit
+    const base64Image = await compressAndEncodeImage(imageUri, 15.0);
 
-    // Convert image to base64
-    const base64Image = await imageToBase64(manipulatedImage.uri);
+    if (!OPENROUTER_API_KEY) {
+      throw new Error('Missing OPENROUTER_API_KEY');
+    }
 
-    // Call OpenRouter API
+    // Call OpenRouter API (matching Swift implementation)
     const response = await fetch(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'com.safepath.app',
-        'X-Title': 'SafePath Navigation Assistant',
+        'HTTP-Referer': OPENROUTER_SITE_URL,
+        'X-Title': OPENROUTER_APP_NAME,
       },
       body: JSON.stringify({
         model: OPENROUTER_MODEL,
@@ -48,8 +116,6 @@ export async function analyzeImageWithVLM(
             ],
           },
         ],
-        max_tokens: 300,
-        temperature: 0.7,
       }),
     });
 

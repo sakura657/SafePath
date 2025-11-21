@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,18 +8,27 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { API_BASE_URL, OPENROUTER_API_KEY } from '../config/env';
 import { checkBackendHealth } from '../services/asrLlmService';
+import { useAppConfig } from '../config/AppConfigProvider';
 
 export function SettingsScreen() {
-  const [backendUrl, setBackendUrl] = useState(API_BASE_URL);
-  const [apiKey, setApiKey] = useState(OPENROUTER_API_KEY);
+  const { config, updateConfig, resetConfig } = useAppConfig();
+  const [backendUrl, setBackendUrl] = useState(config.apiBaseUrl);
+  const [apiKey, setApiKey] = useState(config.openRouterApiKey);
+  const [model, setModel] = useState(config.openRouterModel);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setBackendUrl(config.apiBaseUrl);
+    setApiKey(config.openRouterApiKey);
+    setModel(config.openRouterModel);
+  }, [config]);
 
   const testBackendConnection = async () => {
     setIsTestingConnection(true);
     try {
-      const isHealthy = await checkBackendHealth();
+      const isHealthy = await checkBackendHealth(backendUrl);
       if (isHealthy) {
         Alert.alert('Success', 'Backend connection successful!');
       } else {
@@ -33,6 +42,27 @@ export function SettingsScreen() {
     } finally {
       setIsTestingConnection(false);
     }
+  };
+
+  const saveSettings = async () => {
+    try {
+      setIsSaving(true);
+      await updateConfig({
+        apiBaseUrl: backendUrl.trim(),
+        openRouterApiKey: apiKey.trim(),
+        openRouterModel: model.trim(),
+      });
+      Alert.alert('Saved', 'Configuration updated successfully.');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save configuration.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const resetToDefaults = async () => {
+    await resetConfig();
+    Alert.alert('Reset', 'Configuration restored to defaults.');
   };
 
   return (
@@ -56,7 +86,7 @@ export function SettingsScreen() {
           autoCorrect={false}
         />
         <Text style={styles.hint}>
-          Current: {API_BASE_URL}
+          Current: {config.apiBaseUrl}
         </Text>
         <TouchableOpacity
           style={styles.testButton}
@@ -84,6 +114,32 @@ export function SettingsScreen() {
         <Text style={styles.hint}>
           Used for VLM (Vision Language Model) analysis
         </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>OpenRouter Model</Text>
+        <TextInput
+          style={styles.input}
+          value={model}
+          onChangeText={setModel}
+          placeholder="google/gemini-2.5-flash-lite-preview-09-2025"
+          placeholderTextColor="#666"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+
+      <View style={styles.sectionButtons}>
+        <TouchableOpacity
+          style={[styles.saveButton, isSaving && styles.buttonDisabled]}
+          onPress={saveSettings}
+          disabled={isSaving}
+        >
+          <Text style={styles.saveButtonText}>{isSaving ? 'Saving...' : 'Save Settings'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.resetButton} onPress={resetToDefaults}>
+          <Text style={styles.resetButtonText}>Reset to Defaults</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
@@ -162,6 +218,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 4,
   },
+  sectionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   testButton: {
     backgroundColor: '#1e88e5',
     borderRadius: 12,
@@ -173,6 +235,34 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: '#43a047',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  resetButton: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#555',
+  },
+  resetButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   infoRow: {
     flexDirection: 'row',

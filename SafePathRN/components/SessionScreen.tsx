@@ -15,6 +15,7 @@ import { sendAudioToBackend } from '../services/asrLlmService';
 import { speak, stopSpeaking } from '../services/ttsService';
 import { analyzeImageWithVLM } from '../services/vlmService';
 import { AppMode } from '../types';
+import { useAppConfig } from '../config/AppConfigProvider';
 
 export function SessionScreen() {
   const [mode, setMode] = useState<AppMode>(AppMode.VOICE_INTERACTION);
@@ -23,6 +24,7 @@ export function SessionScreen() {
   const [userText, setUserText] = useState('');
   const [assistantText, setAssistantText] = useState('');
   const [sessionId] = useState(() => `session_${Date.now()}`);
+  const { config } = useAppConfig();
   
   const cameraRef = useRef<CameraView | null>(null);
 
@@ -48,7 +50,7 @@ export function SessionScreen() {
         console.log('Audio recorded:', audioUri);
         
         // Send to backend for ASR + LLM
-        const response = await sendAudioToBackend(audioUri, 'en', sessionId);
+  const response = await sendAudioToBackend(audioUri, 'en', sessionId, config.apiBaseUrl);
         
         setUserText(response.user_text);
         setAssistantText(response.assistant_text);

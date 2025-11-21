@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import { API_BASE_URL } from '../config/env';
+import * as FileSystem from 'expo-file-system/legacy';
 import { AsrLlmResponse } from '../types';
 
 /**
@@ -9,8 +8,10 @@ import { AsrLlmResponse } from '../types';
 export async function sendAudioToBackend(
   audioUri: string,
   language: string = 'en',
-  sessionId?: string
+  sessionId?: string,
+  baseUrl?: string
 ): Promise<AsrLlmResponse> {
+  let targetBaseUrl = baseUrl?.trim() || process.env.EXPO_PUBLIC_API_BASE_URL || 'http://10.141.7.70:3000';
   try {
     const formData = new FormData();
 
@@ -36,7 +37,7 @@ export async function sendAudioToBackend(
       formData.append('session_id', sessionId);
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/asr-llm`, {
+    const response = await fetch(`${targetBaseUrl}/api/asr-llm`, {
       method: 'POST',
       body: formData,
       headers: {
@@ -52,6 +53,14 @@ export async function sendAudioToBackend(
     const data = (await response.json()) as AsrLlmResponse;
     return data;
   } catch (error) {
+    if (error instanceof TypeError && error.message.includes('Network request failed')) {
+      console.error(
+        `Failed to reach backend at ${targetBaseUrl}. Ensure the device and server are on the same network and the URL is correct.`
+      );
+      throw new Error(
+        `Unable to reach backend at ${targetBaseUrl}. Check that the server is running and accessible from your device.`
+      );
+    }
     console.error('Failed to send audio to backend:', error);
     throw error;
   }
@@ -60,9 +69,10 @@ export async function sendAudioToBackend(
 /**
  * Health check for backend service
  */
-export async function checkBackendHealth(): Promise<boolean> {
+export async function checkBackendHealth(baseUrl?: string): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE_URL}/health`, {
+  const targetBaseUrl = baseUrl?.trim() || process.env.EXPO_PUBLIC_API_BASE_URL || 'http://10.141.7.70:3000';
+    const response = await fetch(`${targetBaseUrl}/health`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
