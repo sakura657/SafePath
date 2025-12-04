@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AsrLlmResponse } from '../types';
+import { API_BASE_URL } from '../config/env';
 
 /**
  * Send audio file to backend for ASR + LLM processing
@@ -11,7 +12,7 @@ export async function sendAudioToBackend(
   sessionId?: string,
   baseUrl?: string
 ): Promise<AsrLlmResponse> {
-  let targetBaseUrl = baseUrl?.trim() || process.env.EXPO_PUBLIC_API_BASE_URL || 'http://10.141.7.70:3000';
+  let targetBaseUrl = baseUrl?.trim() || API_BASE_URL;
   try {
     const formData = new FormData();
 
@@ -71,7 +72,7 @@ export async function sendAudioToBackend(
  */
 export async function checkBackendHealth(baseUrl?: string): Promise<boolean> {
   try {
-  const targetBaseUrl = baseUrl?.trim() || process.env.EXPO_PUBLIC_API_BASE_URL || 'http://10.141.7.70:3000';
+  const targetBaseUrl = baseUrl?.trim() || API_BASE_URL;
     const response = await fetch(`${targetBaseUrl}/health`, {
       method: 'GET',
       headers: {
