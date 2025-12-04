@@ -3,9 +3,17 @@ import * as Speech from 'expo-speech';
 /**
  * Speak the given text using the device's TTS engine
  */
-export function speak(text: string, language: string = 'en-US'): void {
+/**
+ * Speak the given text using the device's TTS engine
+ */
+export function speak(
+  text: string,
+  language: string = 'en-US',
+  options?: { onDone?: () => void; onError?: (error: any) => void }
+): void {
   if (!text || text.trim().length === 0) {
     console.warn('Empty text provided to TTS');
+    options?.onDone?.(); // Treat as done immediately
     return;
   }
 
@@ -15,12 +23,14 @@ export function speak(text: string, language: string = 'en-US'): void {
   Speech.speak(text, {
     language,
     pitch: 1.0,
-    rate: 0.9, // Slightly slower for better clarity
+    rate: 0.9,
     onDone: () => {
       console.log('TTS finished speaking');
+      options?.onDone?.();
     },
     onError: (error) => {
       console.error('TTS error:', error);
+      options?.onError?.(error);
     },
   });
 }

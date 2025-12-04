@@ -5,7 +5,9 @@ let recording: Audio.Recording | null = null;
 /**
  * Request microphone permission and start recording
  */
-export async function startRecording(): Promise<void> {
+export async function startRecording(
+  onStatusUpdate?: (status: Audio.RecordingStatus) => void
+): Promise<void> {
   try {
     const { status } = await Audio.requestPermissionsAsync();
     if (status !== 'granted') {
@@ -17,10 +19,20 @@ export async function startRecording(): Promise<void> {
       playsInSilentModeIOS: true,
     });
 
-    const result = await Audio.Recording.createAsync(
-      Audio.RecordingOptionsPresets.HIGH_QUALITY
-    );
-    recording = result.recording;
+    const options: Audio.RecordingOptions = {
+      ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      isMeteringEnabled: true,
+    };
+
+    const recordingObject = new Audio.Recording();
+    await recordingObject.prepareToRecordAsync(options);
+
+    if (onStatusUpdate) {
+      recordingObject.setOnRecordingStatusUpdate(onStatusUpdate);
+    }
+
+    await recordingObject.startAsync();
+    recording = recordingObject;
   } catch (error) {
     console.error('Failed to start recording:', error);
     throw error;
@@ -39,11 +51,11 @@ export async function stopRecording(): Promise<string> {
     await recording.stopAndUnloadAsync();
     const uri = recording.getURI();
     recording = null;
-    
+
     if (!uri) {
       throw new Error('Recording failed, URI is empty');
     }
-    
+
     return uri;
   } catch (error) {
     console.error('Failed to stop recording:', error);

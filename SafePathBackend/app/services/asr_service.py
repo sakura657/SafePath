@@ -64,7 +64,8 @@ def transcribe_local_faster_whisper(audio_path: str, language: str = "en") -> Tu
         collected = [segment.text.strip() for segment in segments if segment.text]
         transcription = " ".join(collected).strip()
         if not transcription:
-            raise RuntimeError("No speech detected in audio")
+            # Return empty string instead of raising error, so caller can handle it (e.g. fallback to image)
+            return "", 0.0
         confidence = info.language_probability or 0.9
         return transcription, confidence
     finally:

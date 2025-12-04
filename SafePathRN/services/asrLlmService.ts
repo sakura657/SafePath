@@ -33,7 +33,7 @@ export async function sendAudioToBackend(
     } as any);
 
     formData.append('language', language);
-    
+
     if (sessionId) {
       formData.append('session_id', sessionId);
     }
@@ -72,7 +72,7 @@ export async function sendAudioToBackend(
  */
 export async function checkBackendHealth(baseUrl?: string): Promise<boolean> {
   try {
-  const targetBaseUrl = baseUrl?.trim() || API_BASE_URL;
+    const targetBaseUrl = baseUrl?.trim() || API_BASE_URL;
     const response = await fetch(`${targetBaseUrl}/health`, {
       method: 'GET',
       headers: {
@@ -83,5 +83,71 @@ export async function checkBackendHealth(baseUrl?: string): Promise<boolean> {
   } catch (error) {
     console.error('Backend health check failed:', error);
     return false;
+  }
+}
+
+/**
+ * Send audio and image to backend for Real-time VLM processing
+ */
+export async function sendRealtimeRequest(
+  audioUri: string,
+  imageUri: string,
+  language: string = 'en',
+  sessionId?: string,
+  baseUrl?: string
+): Promise<AsrLlmResponse> {
+  let targetBaseUrl = baseUrl?.trim() || API_BASE_URL;
+  try {
+    const formData = new FormData();
+
+    // 1. Append Audio
+    const audioFileInfo = await FileSystem.getInfoAsync(audioUri);
+    if (!audioFileInfo.exists) {
+      throw new Error('Audio file does not exist');
+    }
+    const audioFileName = audioUri.split('/').pop() || 'audio.m4a';
+    formData.append('audio', {
+      // @ts-ignore
+      uri: audioUri,
+      name: audioFileName,
+      type: Platform.OS === 'ios' ? 'audio/m4a' : 'audio/3gp',
+    } as any);
+
+    // 2. Append Image
+    const imageFileInfo = await FileSystem.getInfoAsync(imageUri);
+    if (!imageFileInfo.exists) {
+      throw new Error('Image file does not exist');
+    }
+    const imageFileName = imageUri.split('/').pop() || 'image.jpg';
+    formData.append('image', {
+      // @ts-ignore
+      uri: imageUri,
+      name: imageFileName,
+      type: 'image/jpeg',
+    } as any);
+
+    // 3. Other fields
+    formData.append('language', language);
+    if (sessionId) {
+      formData.append('session_id', sessionId);
+    }
+
+    const response = await fetch(`${targetBaseUrl}/api/realtime`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        // Multipart boundary handled automatically
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Backend error (${response.status}): ${errorText}`);
+    }
+
+    return (await response.json()) as AsrLlmResponse;
+  } catch (error) {
+    console.error('Failed to send realtime request:', error);
+    throw error;
   }
 }

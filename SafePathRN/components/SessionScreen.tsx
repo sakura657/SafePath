@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,220 +6,229 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { CameraView } from 'expo-camera';
+import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
 import { CameraPreview } from '../components/CameraPreview';
 import { SubtitlePanel } from '../components/SubtitlePanel';
 import { startRecording, stopRecording, cancelRecording } from '../services/audioService';
-import { sendAudioToBackend } from '../services/asrLlmService';
+import { sendRealtimeRequest } from '../services/asrLlmService';
 import { speak, stopSpeaking } from '../services/ttsService';
-import { analyzeImageWithVLM } from '../services/vlmService';
-import { AppMode } from '../types';
 import { useAppConfig } from '../config/AppConfigProvider';
 
+// VAD Constants
+const SPEECH_THRESHOLD = -30; // dB
+const SILENCE_DURATION_MS = 1500; // 1.5 seconds of silence to trigger
+const MIN_SPEECH_DURATION_MS = 500; // Minimum speech duration to consider valid
+
+type SessionState = 'idle' | 'listening' | 'processing' | 'speaking';
+
 export function SessionScreen() {
-  const [mode, setMode] = useState<AppMode>(AppMode.VOICE_INTERACTION);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [status, setStatus] = useState<SessionState>('idle');
   const [userText, setUserText] = useState('');
   const [assistantText, setAssistantText] = useState('');
   const [sessionId] = useState(() => `session_${Date.now()}`);
   const { config } = useAppConfig();
-  
+
   const cameraRef = useRef<CameraView | null>(null);
 
+  // VAD Refs
+  const lastSpeechTime = useRef<number>(0);
+  const silenceStartTime = useRef<number>(0);
+  const isSpeechDetected = useRef<boolean>(false);
+  const speechStartTime = useRef<number>(0);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cancelRecording();
+      stopSpeaking();
+    };
+  }, []);
+
   /**
-   * Handle voice interaction mode - record audio and get LLM response
+   * Start the Real-time Loop
    */
-  const handleVoiceInteraction = async () => {
+  const startSession = async () => {
     try {
-      if (!isRecording) {
-        // Start recording
-        setUserText('');
-        setAssistantText('');
-        stopSpeaking(); // Stop any ongoing TTS
-        
-        await startRecording();
-        setIsRecording(true);
-      } else {
-        // Stop recording and process
-        setIsRecording(false);
-        setIsProcessing(true);
-        
-        const audioUri = await stopRecording();
-        console.log('Audio recorded:', audioUri);
-        
-        // Send to backend for ASR + LLM
-  const response = await sendAudioToBackend(audioUri, 'en', sessionId, config.apiBaseUrl);
-        
-        setUserText(response.user_text);
-        setAssistantText(response.assistant_text);
-        
-        // Speak the response
-        speak(response.assistant_text, 'en-US');
-      }
+      stopSpeaking();
+      await startListening();
     } catch (error) {
-      console.error('Voice interaction error:', error);
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to process voice input'
-      );
-      await cancelRecording();
-      setIsRecording(false);
-    } finally {
-      setIsProcessing(false);
+      Alert.alert('Error', 'Failed to start session');
     }
   };
 
   /**
-   * Handle obstacle detection mode - capture image and analyze with VLM
+   * Stop the session
    */
-  const handleObstacleDetection = async () => {
-    if (!cameraRef.current) {
-      Alert.alert('Error', 'Camera not ready');
-      return;
+  const stopSession = async () => {
+    setStatus('idle');
+    await cancelRecording();
+    stopSpeaking();
+  };
+
+  /**
+   * Start Listening (Recording with VAD)
+   */
+  const startListening = async () => {
+    try {
+      setStatus('listening');
+
+      // Reset VAD state
+      isSpeechDetected.current = false;
+      silenceStartTime.current = 0;
+      speechStartTime.current = 0;
+
+      await startRecording((status: Audio.RecordingStatus) => {
+        if (!status.isRecording) return;
+
+        const metering = status.metering || -160;
+        const now = Date.now();
+
+        // Check if TTS is speaking (ignore audio if system is speaking)
+        Speech.isSpeakingAsync().then(isSpeaking => {
+          if (isSpeaking) return;
+
+          if (metering > SPEECH_THRESHOLD) {
+            // Speech detected
+            if (!isSpeechDetected.current) {
+              isSpeechDetected.current = true;
+              speechStartTime.current = now;
+              console.log('VAD: Speech started');
+            }
+            lastSpeechTime.current = now;
+            silenceStartTime.current = 0;
+          } else {
+            // Silence
+            if (isSpeechDetected.current) {
+              if (silenceStartTime.current === 0) {
+                silenceStartTime.current = now;
+              } else {
+                const silenceDuration = now - silenceStartTime.current;
+                const speechDuration = lastSpeechTime.current - speechStartTime.current;
+
+                // Trigger if silence > threshold AND we had enough speech
+                if (silenceDuration > SILENCE_DURATION_MS && speechDuration > MIN_SPEECH_DURATION_MS) {
+                  console.log('VAD: Silence detected, processing...');
+                  processRequest();
+                }
+              }
+            }
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Failed to start listening:', error);
+      setStatus('idle');
     }
+  };
+
+  /**
+   * Process Request (Stop recording, take picture, send to backend)
+   */
+  const processRequest = async () => {
+    if (status === 'processing') return; // Prevent double trigger
 
     try {
-      setIsProcessing(true);
-      setUserText('');
-      setAssistantText('');
-      stopSpeaking();
+      setStatus('processing');
 
-      // Capture photo
+      // 1. Stop Recording
+      const audioUri = await stopRecording();
+      console.log('Audio captured:', audioUri);
+
+      // 2. Take Picture
+      if (!cameraRef.current) {
+        throw new Error('Camera not ready');
+      }
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+        quality: 0.4, // Lower quality to reduce size
         base64: false,
+        skipProcessing: false, // Enable processing to apply quality setting
+        scale: 0.5, // Downscale image
       });
 
       if (!photo || !photo.uri) {
         throw new Error('Failed to capture image');
       }
-
       console.log('Image captured:', photo.uri);
 
-      // Analyze with VLM
-      const vlmResponse = await analyzeImageWithVLM(
+      // 3. Send to Backend
+      const response = await sendRealtimeRequest(
+        audioUri,
         photo.uri,
-        'Describe the scene for a visually impaired person. Focus on obstacles, hazards, and navigation guidance.'
+        'en',
+        sessionId,
+        config.apiBaseUrl
       );
 
-      const responseText = vlmResponse.description;
-      
-      setUserText('Scene analysis requested');
-      setAssistantText(responseText);
-      
-      // Speak the description
-      speak(responseText, 'en-US');
-      
+      setUserText(response.user_text);
+      setAssistantText(response.assistant_text);
+
+      // 4. Speak Response
+      setStatus('speaking');
+      speak(response.assistant_text, 'en-US', {
+        onDone: () => {
+          // Resume listening after speaking
+          console.log('TTS finished, resuming listening...');
+          startListening();
+        },
+        onError: () => {
+          startListening();
+        }
+      });
+
     } catch (error) {
-      console.error('Obstacle detection error:', error);
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to analyze scene'
-      );
-    } finally {
-      setIsProcessing(false);
+      console.error('Processing error:', error);
+      // If error, go back to listening or idle?
+      // Let's go back to listening to keep the loop alive, but maybe warn user?
+      // For now, just resume listening.
+      startListening();
     }
   };
 
-  /**
-   * Main action handler based on current mode
-   */
-  const handleMainAction = () => {
-    if (mode === AppMode.VOICE_INTERACTION) {
-      handleVoiceInteraction();
-    } else {
-      handleObstacleDetection();
-    }
-  };
-
-  const getButtonText = () => {
-    if (isProcessing) return 'Processing...';
-    
-    if (mode === AppMode.VOICE_INTERACTION) {
-      return isRecording ? 'Stop & Send' : 'Press to Speak';
-    } else {
-      return 'Capture & Analyze';
+  const getStatusText = () => {
+    switch (status) {
+      case 'idle': return 'Start Real-time Mode';
+      case 'listening': return 'Listening...';
+      case 'processing': return 'Processing...';
+      case 'speaking': return 'Speaking...';
     }
   };
 
   const getButtonStyle = () => {
-    if (isRecording) return styles.buttonRecording;
-    if (mode === AppMode.OBSTACLE_DETECTION) return styles.buttonObstacle;
-    return styles.button;
+    switch (status) {
+      case 'idle': return styles.buttonStart;
+      case 'listening': return styles.buttonListening;
+      case 'processing': return styles.buttonProcessing;
+      case 'speaking': return styles.buttonSpeaking;
+    }
   };
 
   return (
     <View style={styles.container}>
-      {/* Mode Selector */}
-      <View style={styles.modeSelector}>
-        <TouchableOpacity
-          style={[
-            styles.modeButton,
-            mode === AppMode.VOICE_INTERACTION && styles.modeButtonActive,
-          ]}
-          onPress={() => {
-            setMode(AppMode.VOICE_INTERACTION);
-            cancelRecording();
-            setIsRecording(false);
-          }}
-          disabled={isRecording || isProcessing}
-        >
-          <Text
-            style={[
-              styles.modeButtonText,
-              mode === AppMode.VOICE_INTERACTION && styles.modeButtonTextActive,
-            ]}
-          >
-            Voice
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[
-            styles.modeButton,
-            mode === AppMode.OBSTACLE_DETECTION && styles.modeButtonActive,
-          ]}
-          onPress={() => {
-            setMode(AppMode.OBSTACLE_DETECTION);
-            cancelRecording();
-            setIsRecording(false);
-          }}
-          disabled={isRecording || isProcessing}
-        >
-          <Text
-            style={[
-              styles.modeButtonText,
-              mode === AppMode.OBSTACLE_DETECTION && styles.modeButtonTextActive,
-            ]}
-          >
-            Obstacle
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Camera Preview */}
+      {/* Camera Preview (Always active) */}
       <CameraPreview cameraRef={cameraRef} />
 
       {/* Subtitle Panel */}
       <SubtitlePanel
         userText={userText}
         assistantText={assistantText}
-        isLoading={isProcessing}
+        isLoading={status === 'processing'}
       />
 
-      {/* Action Button */}
+      {/* Control Area */}
       <View style={styles.actionArea}>
-        {isProcessing && <ActivityIndicator size="large" color="#1e88e5" />}
-        
         <TouchableOpacity
-          style={[getButtonStyle(), (isProcessing) && styles.buttonDisabled]}
-          onPress={handleMainAction}
-          disabled={isProcessing}
+          style={[styles.button, getButtonStyle()]}
+          onPress={status === 'idle' ? startSession : stopSession}
           activeOpacity={0.8}
         >
-          <Text style={styles.buttonText}>{getButtonText()}</Text>
+          <Text style={styles.buttonText}>{getStatusText()}</Text>
+          {status === 'listening' && (
+            <Text style={styles.subText}>Speak now...</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -233,84 +242,45 @@ const styles = StyleSheet.create({
     gap: 16,
     backgroundColor: '#000000',
   },
-  modeSelector: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingTop: 8,
-  },
-  modeButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: '#1a1a1a',
-    borderWidth: 2,
-    borderColor: '#333333',
-    alignItems: 'center',
-  },
-  modeButtonActive: {
-    backgroundColor: '#1e88e5',
-    borderColor: '#1e88e5',
-  },
-  modeButtonText: {
-    color: '#888888',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modeButtonTextActive: {
-    color: '#ffffff',
-  },
   actionArea: {
     alignItems: 'center',
-    paddingBottom: 16,
-    gap: 12,
+    paddingBottom: 32,
   },
   button: {
     width: '85%',
-    height: 64,
-    borderRadius: 32,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  buttonStart: {
     backgroundColor: '#1e88e5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#1e88e5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
-  buttonRecording: {
-    width: '85%',
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#e53935',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#e53935',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+  buttonListening: {
+    backgroundColor: '#e53935', // Red for recording
+    borderWidth: 4,
+    borderColor: '#ff8a80',
   },
-  buttonObstacle: {
-    width: '85%',
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#43a047',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#43a047',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+  buttonProcessing: {
+    backgroundColor: '#fb8c00', // Orange for processing
   },
-  buttonDisabled: {
-    opacity: 0.5,
+  buttonSpeaking: {
+    backgroundColor: '#43a047', // Green for speaking
   },
   buttonText: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
+  subText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    marginTop: 4,
+  }
 });
