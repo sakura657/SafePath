@@ -65,10 +65,7 @@ export function CameraPreview({ onCameraReady, cameraRef }: CameraPreviewProps) 
 
 const styles = StyleSheet.create({
   container: {
-    width: '100%',
-    aspectRatio: 3 / 4,
-    borderRadius: 16,
-    overflow: 'hidden',
+    flex: 1,
     backgroundColor: '#000',
   },
   loadingContainer: {

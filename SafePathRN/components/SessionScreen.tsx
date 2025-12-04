@@ -8,11 +8,13 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView } from 'expo-camera';
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import { CameraPreview } from '../components/CameraPreview';
-import { SubtitlePanel } from '../components/SubtitlePanel';
+import { OverlayBubble } from '../components/ui/OverlayBubble';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { startRecording, stopRecording, cancelRecording } from '../services/audioService';
 import { sendRealtimeRequest } from '../services/asrLlmService';
 import { speak, stopSpeaking } from '../services/ttsService';
@@ -29,8 +31,11 @@ export function SessionScreen() {
   const [status, setStatus] = useState<SessionState>('idle');
   const [userText, setUserText] = useState('');
   const [assistantText, setAssistantText] = useState('');
+  const [showUserText, setShowUserText] = useState(false);
+  const [showAssistantText, setShowAssistantText] = useState(false);
   const [sessionId] = useState(() => `session_${Date.now()}`);
   const { config } = useAppConfig();
+  const insets = useSafeAreaInsets();
 
   const cameraRef = useRef<CameraView | null>(null);
 
@@ -39,12 +44,14 @@ export function SessionScreen() {
   const silenceStartTime = useRef<number>(0);
   const isSpeechDetected = useRef<boolean>(false);
   const speechStartTime = useRef<number>(0);
+  const userTextTimer = useRef<any>(null);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       cancelRecording();
       stopSpeaking();
+      if (userTextTimer.current) clearTimeout(userTextTimer.current);
     };
   }, []);
 
@@ -67,6 +74,8 @@ export function SessionScreen() {
     setStatus('idle');
     await cancelRecording();
     stopSpeaking();
+    setShowUserText(false);
+    setShowAssistantText(false);
   };
 
   /**
@@ -75,6 +84,7 @@ export function SessionScreen() {
   const startListening = async () => {
     try {
       setStatus('listening');
+      setShowAssistantText(false); // Hide AI text when listening starts
 
       // Reset VAD state
       isSpeechDetected.current = false;
@@ -163,8 +173,19 @@ export function SessionScreen() {
         config.apiBaseUrl
       );
 
+      // Show User Text (Green Bubble)
       setUserText(response.user_text);
+      setShowUserText(true);
+
+      // Auto-hide user text after 5 seconds
+      if (userTextTimer.current) clearTimeout(userTextTimer.current);
+      userTextTimer.current = setTimeout(() => {
+        setShowUserText(false);
+      }, 5000);
+
+      // Show AI Text (Blue Bubble)
       setAssistantText(response.assistant_text);
+      setShowAssistantText(true);
 
       // 4. Speak Response
       setStatus('speaking');
@@ -188,21 +209,21 @@ export function SessionScreen() {
     }
   };
 
-  const getStatusText = () => {
+  const getButtonIcon = () => {
     switch (status) {
-      case 'idle': return 'Start Real-time Mode';
-      case 'listening': return 'Listening...';
-      case 'processing': return 'Processing...';
-      case 'speaking': return 'Speaking...';
+      case 'idle': return 'mic.fill';
+      case 'listening': return 'waveform';
+      case 'processing': return 'hourglass';
+      case 'speaking': return 'speaker.wave.2.fill';
     }
   };
 
-  const getButtonStyle = () => {
+  const getButtonColor = () => {
     switch (status) {
-      case 'idle': return styles.buttonStart;
-      case 'listening': return styles.buttonListening;
-      case 'processing': return styles.buttonProcessing;
-      case 'speaking': return styles.buttonSpeaking;
+      case 'idle': return '#1e88e5'; // Blue
+      case 'listening': return '#e53935'; // Red
+      case 'processing': return '#fb8c00'; // Orange
+      case 'speaking': return '#43a047'; // Green
     }
   };
 
@@ -211,24 +232,33 @@ export function SessionScreen() {
       {/* Camera Preview (Always active) */}
       <CameraPreview cameraRef={cameraRef} />
 
-      {/* Subtitle Panel */}
-      <SubtitlePanel
-        userText={userText}
-        assistantText={assistantText}
-        isLoading={status === 'processing'}
-      />
+      {/* AI Response (Blue Bubble - Top) */}
+      <View style={[styles.topOverlay, { top: 20 + insets.top }]}>
+        <OverlayBubble
+          text={assistantText}
+          type="ai"
+          visible={showAssistantText}
+        />
+      </View>
 
-      {/* Control Area */}
-      <View style={styles.actionArea}>
+      {/* User Speech (Green Bubble - Bottom) */}
+      <View style={[styles.bottomOverlay, { bottom: 100 + insets.bottom }]}>
+        <OverlayBubble
+          text={userText}
+          type="user"
+          visible={showUserText}
+        />
+      </View>
+
+      {/* Control Area - Simplified Button */}
+      <View style={[styles.actionArea, { bottom: 20 + insets.bottom }]}>
         <TouchableOpacity
-          style={[styles.button, getButtonStyle()]}
+          style={[styles.button, { backgroundColor: getButtonColor() }]}
           onPress={status === 'idle' ? startSession : stopSession}
           activeOpacity={0.8}
         >
-          <Text style={styles.buttonText}>{getStatusText()}</Text>
-          {status === 'listening' && (
-            <Text style={styles.subText}>Speak now...</Text>
-          )}
+          <IconSymbol size={32} name={getButtonIcon()} color="#fff" />
+          {status === 'idle' && <Text style={styles.buttonText}>Start</Text>}
         </TouchableOpacity>
       </View>
     </View>
@@ -238,49 +268,46 @@ export function SessionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
-    gap: 16,
     backgroundColor: '#000000',
   },
-  actionArea: {
+  topOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    paddingBottom: 32,
+    zIndex: 10,
+  },
+  bottomOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  actionArea: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   button: {
-    width: '85%',
-    height: 80,
-    borderRadius: 40,
+    flexDirection: 'row',
+    height: 64,
+    paddingHorizontal: 32,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
-  buttonStart: {
-    backgroundColor: '#1e88e5',
-  },
-  buttonListening: {
-    backgroundColor: '#e53935', // Red for recording
-    borderWidth: 4,
-    borderColor: '#ff8a80',
-  },
-  buttonProcessing: {
-    backgroundColor: '#fb8c00', // Orange for processing
-  },
-  buttonSpeaking: {
-    backgroundColor: '#43a047', // Green for speaking
-  },
   buttonText: {
     color: '#ffffff',
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
-  subText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    marginTop: 4,
-  }
 });

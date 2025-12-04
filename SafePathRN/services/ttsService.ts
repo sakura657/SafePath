@@ -1,20 +1,27 @@
 import * as Speech from 'expo-speech';
+import { Audio } from 'expo-av';
 
 /**
  * Speak the given text using the device's TTS engine
  */
-/**
- * Speak the given text using the device's TTS engine
- */
-export function speak(
+export async function speak(
   text: string,
   language: string = 'en-US',
   options?: { onDone?: () => void; onError?: (error: any) => void }
-): void {
+): Promise<void> {
   if (!text || text.trim().length === 0) {
     console.warn('Empty text provided to TTS');
     options?.onDone?.(); // Treat as done immediately
     return;
+  }
+
+  try {
+    // Ensure audio plays even in silent mode
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+    });
+  } catch (error) {
+    console.warn('Failed to set audio mode for TTS:', error);
   }
 
   // Stop any ongoing speech

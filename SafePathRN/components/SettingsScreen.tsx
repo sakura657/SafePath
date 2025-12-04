@@ -11,6 +11,7 @@ import {
 import { checkBackendHealth } from '../services/asrLlmService';
 import { useAppConfig } from '../config/AppConfigProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export function SettingsScreen() {
   const { config, updateConfig, resetConfig } = useAppConfig();
@@ -79,128 +80,133 @@ export function SettingsScreen() {
     }
   };
 
+  // ...
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Configuration</Text>
-        <Text style={styles.description}>
-          Configure your backend API and OpenRouter settings below.
-        </Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>Backend API URL</Text>
-        <TextInput
-          style={styles.input}
-          value={backendUrl}
-          onChangeText={setBackendUrl}
-          placeholder="http://localhost:3000"
-          placeholderTextColor="#666"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        <Text style={styles.hint}>
-          Current: {config.apiBaseUrl}
-        </Text>
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={testBackendConnection}
-          disabled={isTestingConnection}
-        >
-          <Text style={styles.testButtonText}>
-            {isTestingConnection ? 'Testing...' : 'Test Connection'}
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
+        {/* ... content ... */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Configuration</Text>
+          <Text style={styles.description}>
+            Configure your backend API and OpenRouter settings below.
           </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>OpenRouter API Key</Text>
-        <TextInput
-          style={styles.input}
-          value={apiKey}
-          onChangeText={setApiKey}
-          placeholder="sk-or-v1-..."
-          placeholderTextColor="#666"
-          autoCapitalize="none"
-          autoCorrect={false}
-          secureTextEntry
-        />
-        <Text style={styles.hint}>
-          Used for VLM (Vision Language Model) analysis
-        </Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>OpenRouter Model</Text>
-        <TextInput
-          style={styles.input}
-          value={model}
-          onChangeText={setModel}
-          placeholder="google/gemini-2.5-flash-lite-preview-09-2025"
-          placeholderTextColor="#666"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </View>
-
-      <View style={styles.sectionButtons}>
-        <TouchableOpacity
-          style={[styles.saveButton, isSaving && styles.buttonDisabled]}
-          onPress={saveSettings}
-          disabled={isSaving}
-        >
-          <Text style={styles.saveButtonText}>{isSaving ? 'Saving...' : 'Save Settings'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.resetButton} onPress={resetToDefaults}>
-          <Text style={styles.resetButtonText}>Reset to Defaults</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account</Text>
-        <Text style={styles.description}>
-          Signed in as{' '}
-          <Text style={styles.infoValue}>{user?.email ?? 'Unknown user'}</Text>
-        </Text>
-        <TouchableOpacity
-          style={[styles.logoutButton, isLoggingOut && styles.buttonDisabled]}
-          onPress={handleLogout}
-          disabled={isLoggingOut}
-        >
-          <Text style={styles.logoutButtonText}>{isLoggingOut ? 'Logging out...' : 'Logout'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
-        <Text style={styles.description}>
-          SafePath uses advanced AI to provide voice interaction and obstacle detection
-          for enhanced navigation assistance.
-        </Text>
-        
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Version:</Text>
-          <Text style={styles.infoValue}>1.0.0</Text>
         </View>
-        
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Voice Mode:</Text>
-          <Text style={styles.infoValue}>ASR + LLM</Text>
-        </View>
-        
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Obstacle Mode:</Text>
-          <Text style={styles.infoValue}>VLM Analysis</Text>
-        </View>
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.warningText}>
-          ⚠️ Note: Backend server must be running for voice interaction mode to work.
-          Obstacle detection mode requires a valid OpenRouter API key.
-        </Text>
-      </View>
-    </ScrollView>
+        <View style={styles.section}>
+          <Text style={styles.label}>Backend API URL</Text>
+          <TextInput
+            style={styles.input}
+            value={backendUrl}
+            onChangeText={setBackendUrl}
+            placeholder="http://localhost:3000"
+            placeholderTextColor="#666"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Text style={styles.hint}>
+            Current: {config.apiBaseUrl}
+          </Text>
+          <TouchableOpacity
+            style={styles.testButton}
+            onPress={testBackendConnection}
+            disabled={isTestingConnection}
+          >
+            <Text style={styles.testButtonText}>
+              {isTestingConnection ? 'Testing...' : 'Test Connection'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>OpenRouter API Key</Text>
+          <TextInput
+            style={styles.input}
+            value={apiKey}
+            onChangeText={setApiKey}
+            placeholder="sk-or-v1-..."
+            placeholderTextColor="#666"
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+          <Text style={styles.hint}>
+            Used for VLM (Vision Language Model) analysis
+          </Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>OpenRouter Model</Text>
+          <TextInput
+            style={styles.input}
+            value={model}
+            onChangeText={setModel}
+            placeholder="google/gemini-2.5-flash-lite-preview-09-2025"
+            placeholderTextColor="#666"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+
+        <View style={styles.sectionButtons}>
+          <TouchableOpacity
+            style={[styles.saveButton, isSaving && styles.buttonDisabled]}
+            onPress={saveSettings}
+            disabled={isSaving}
+          >
+            <Text style={styles.saveButtonText}>{isSaving ? 'Saving...' : 'Save Settings'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.resetButton} onPress={resetToDefaults}>
+            <Text style={styles.resetButtonText}>Reset to Defaults</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <Text style={styles.description}>
+            Signed in as{' '}
+            <Text style={styles.infoValue}>{user?.email ?? 'Unknown user'}</Text>
+          </Text>
+          <TouchableOpacity
+            style={[styles.logoutButton, isLoggingOut && styles.buttonDisabled]}
+            onPress={handleLogout}
+            disabled={isLoggingOut}
+          >
+            <Text style={styles.logoutButtonText}>{isLoggingOut ? 'Logging out...' : 'Logout'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>About</Text>
+          <Text style={styles.description}>
+            SafePath uses advanced AI to provide voice interaction and obstacle detection
+            for enhanced navigation assistance.
+          </Text>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Version:</Text>
+            <Text style={styles.infoValue}>1.0.0</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Voice Mode:</Text>
+            <Text style={styles.infoValue}>ASR + LLM</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Obstacle Mode:</Text>
+            <Text style={styles.infoValue}>VLM Analysis</Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.warningText}>
+            ⚠️ Note: Backend server must be running for voice interaction mode to work.
+            Obstacle detection mode requires a valid OpenRouter API key.
+          </Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -208,6 +214,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  scrollView: {
+    flex: 1,
   },
   contentContainer: {
     padding: 20,

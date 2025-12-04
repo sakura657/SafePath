@@ -14,7 +14,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "SafePath needs camera access to help you navigate your environment safely.",
         "NSMicrophoneUsageDescription": "SafePath needs microphone access to process your voice commands.",
-        "NSSpeechRecognitionUsageDescription": "SafePath uses speech recognition to understand your voice commands."
+        "NSSpeechRecognitionUsageDescription": "SafePath uses speech recognition to understand your voice commands.",
+        "NSLocationWhenInUseUsageDescription": "SafePath needs your location to provide navigation assistance and identify your current address."
       }
     },
     "android": {
@@ -31,7 +32,9 @@
         "CAMERA",
         "RECORD_AUDIO",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {
@@ -44,6 +47,12 @@
         "expo-camera",
         {
           "cameraPermission": "SafePath needs camera access to help you navigate your environment safely."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "SafePath needs your location to provide navigation assistance and identify your current address."
         }
       ],
       [
