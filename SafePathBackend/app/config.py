@@ -1,16 +1,25 @@
 """
 Configuration management for SafePath Backend
 """
-from pydantic_settings import BaseSettings
+from pathlib import Path
 from typing import Literal
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
     # OpenRouter Configuration (used for all LLM calls)
-    openrouter_api_key: str = ""
-    openrouter_model: str = "google/gemini-2.5-flash-lite-preview-09-2025"
+    openrouter_api_key: str = Field(
+        default="",
+        alias="OPENROUTER_API_KEY",
+    )
+    openrouter_model: str = Field(
+        default="google/gemini-2.5-flash-lite-preview-09-2025",
+        alias="OPENROUTER_MODEL",
+    )
     
     # Server Configuration
     host: str = "0.0.0.0"
@@ -28,9 +37,12 @@ class Settings(BaseSettings):
     # System Prompt
     system_prompt: str = "You are a helpful navigation assistant for visually impaired users. Provide clear, concise, and actionable responses in 20 words or less."
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    # Pydantic v2 settings config
+    model_config = SettingsConfigDict(
+        # Resolve .env relative to project root so cwd doesn’t matter
+        env_file=str(Path(__file__).resolve().parent.parent / ".env"),
+        case_sensitive=False,
+    )
 
 
 # Global settings instance
