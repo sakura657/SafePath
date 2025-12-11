@@ -4,12 +4,14 @@ import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { LoginScreen } from '@/components/LoginScreen';
 
+import { BiometricLockScreen } from '@/components/BiometricLockScreen';
+
 interface AuthGateProps {
   children: ReactNode;
 }
 
 export function AuthGate({ children }: AuthGateProps) {
-  const { user, initializing } = useAuth();
+  const { user, initializing, isLocked } = useAuth();
 
   if (initializing) {
     return (
@@ -22,6 +24,10 @@ export function AuthGate({ children }: AuthGateProps) {
 
   if (!user) {
     return <LoginScreen />;
+  }
+
+  if (isLocked) {
+    return <BiometricLockScreen />;
   }
 
   return <>{children}</>;

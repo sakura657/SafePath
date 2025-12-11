@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { BiometricService } from '@/services/biometricService';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export function LoginScreen() {
   const { signInWithEmail, registerWithEmail } = useAuth();
@@ -19,6 +21,47 @@ export function LoginScreen() {
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
+
+  useEffect(() => {
+    checkBiometricLogin();
+  }, []);
+
+  const checkBiometricLogin = async () => {
+    const { hasHardware, isEnrolled, supportedTypes } = await BiometricService.checkAvailability();
+    console.log('[BiometricDebug] Hardware:', hasHardware, 'Enrolled:', isEnrolled, 'Types:', supportedTypes);
+
+    if (hasHardware && isEnrolled) {
+      setIsBiometricAvailable(true);
+      // Check if we have stored credentials
+      const credentials = await BiometricService.getCredentials();
+      console.log('[BiometricDebug] Credentials found:', !!credentials);
+
+      if (credentials) {
+        // Auto-trigger biometric auth with a slight delay to ensure UI is ready
+        setTimeout(() => {
+          console.log('[BiometricDebug] Triggering auto-login...');
+          handleBiometricLogin(credentials);
+        }, 500);
+      }
+    } else {
+      console.log('[BiometricDebug] Biometrics not available or not enrolled');
+    }
+  };
+
+  const handleBiometricLogin = async (credentials: { email: string; pass: string }) => {
+    const success = await BiometricService.authenticate('Login with Face ID');
+    if (success) {
+      setIsSubmitting(true);
+      try {
+        await signInWithEmail(credentials.email, credentials.pass);
+      } catch (error) {
+        Alert.alert('Biometric Login Failed', 'Could not sign in with stored credentials.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+  };
 
   const handleSubmit = async () => {
     if (!email || !password) {
@@ -32,6 +75,10 @@ export function LoginScreen() {
         await registerWithEmail(email, password);
       } else {
         await signInWithEmail(email, password);
+        // Save credentials on successful login if biometric is available
+        if (isBiometricAvailable) {
+          await BiometricService.saveCredentials(email, password);
+        }
       }
       setEmail('');
       setPassword('');
@@ -85,6 +132,24 @@ export function LoginScreen() {
             <Text style={styles.buttonText}>{isRegistering ? 'Create Account' : 'Sign In'}</Text>
           )}
         </TouchableOpacity>
+
+        {/* Manual Biometric Button (if available but auto-trigger failed or cancelled) */}
+        {isBiometricAvailable && !isRegistering && !isSubmitting && (
+          <TouchableOpacity
+            style={styles.biometricButton}
+            onPress={async () => {
+              const creds = await BiometricService.getCredentials();
+              if (creds) {
+                handleBiometricLogin(creds);
+              } else {
+                Alert.alert('No Credentials', 'Please sign in manually once to enable Face ID.');
+              }
+            }}
+          >
+            <IconSymbol size={24} name="faceid" color="#1e88e5" />
+            <Text style={styles.biometricText}>Login with Face ID</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity onPress={() => setIsRegistering((prev) => !prev)} disabled={isSubmitting}>
           <Text style={styles.toggleText}>
@@ -145,6 +210,18 @@ const styles = StyleSheet.create({
   toggleText: {
     color: '#1e88e5',
     textAlign: 'center',
+    fontWeight: '600',
+  },
+  biometricButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    padding: 8,
+  },
+  biometricText: {
+    color: '#1e88e5',
+    fontSize: 16,
     fontWeight: '600',
   },
 });

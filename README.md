@@ -76,6 +76,20 @@ npx expo start -c
 2.  Scan the QR code displayed in Terminal 2.
 3.  Ensure your phone is on the **same Wi-Fi network** as your computer.
 
+### Development Build (For Native Features)
+
+Some features (like Face ID) require a custom Development Build instead of Expo Go.
+
+1.  Connect your iPhone to your Mac via USB.
+2.  Run the following command to build and install the app on your device:
+
+```bash
+cd SafePathRN
+npx expo run:ios --device
+```
+
+*Note: This requires Xcode to be installed and configured.*
+
 ## Usage
 
 - **Real-time Mode**: The app automatically listens for speech. Just ask a question like "What is in front of me?" or "Is the path clear?".

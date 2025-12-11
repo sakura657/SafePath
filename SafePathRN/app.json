@@ -10,12 +10,13 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.safepath.app",
+      "bundleIdentifier": "com.safepath.app.bobby",
       "infoPlist": {
         "NSCameraUsageDescription": "SafePath needs camera access to help you navigate your environment safely.",
         "NSMicrophoneUsageDescription": "SafePath needs microphone access to process your voice commands.",
         "NSSpeechRecognitionUsageDescription": "SafePath uses speech recognition to understand your voice commands.",
-        "NSLocationWhenInUseUsageDescription": "SafePath needs your location to provide navigation assistance and identify your current address."
+        "NSLocationWhenInUseUsageDescription": "SafePath needs your location to provide navigation assistance and identify your current address.",
+        "NSFaceIDUsageDescription": "SafePath uses Face ID to securely log you in."
       }
     },
     "android": {
@@ -66,7 +67,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
