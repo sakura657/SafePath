@@ -4,6 +4,8 @@ Handles the main /api/asr-llm endpoint
 """
 import os
 import time
+import tempfile
+
 from fastapi import APIRouter, File, UploadFile, Form, HTTPException
 from typing import Optional
 from pydantic import BaseModel
@@ -57,7 +59,8 @@ async def process_audio(
 
     try:
         # Step 1: Save uploaded audio file temporarily
-        audio_path = f"/tmp/{audio.filename}"
+        tmp_dir = tempfile.gettempdir()
+        audio_path = os.path.join(tmp_dir, audio.filename)
         with open(audio_path, "wb") as f:
             content = await audio.read()
             f.write(content)
